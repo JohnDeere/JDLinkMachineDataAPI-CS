@@ -52,7 +52,7 @@ namespace SampleApp.Sources.democlient
         
          public void authorizeRequestToken() {
             System.Diagnostics.Debug.WriteLine("authUri: " +authUri);
-            Console.WriteLine("Please provide the verifier from "  +authUri);
+            Console.WriteLine("Hit this URL in browser and login. Copy the verifier from browser URL and paste below and hit Enter"  +authUri);
             verifier = Console.ReadLine();
         }
 
