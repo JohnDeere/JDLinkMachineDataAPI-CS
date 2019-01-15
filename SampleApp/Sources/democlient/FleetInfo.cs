@@ -1,62 +1,61 @@
-﻿using Hammock.Authentication.OAuth;
-using System.IO;
+﻿using System.IO;
 using System.Collections.Generic;
+using SampleApp.Sources.democlient.rest;
+using System.Net.Http;
+using System.IO.Compression;
+using System.Xml.Serialization;
+using System.Net;
 
 namespace SampleApp.Sources.democlient
 {
     class FleetInfo
     {
-        string BASE_URI = "https://sandboxapi.deere.com/aemp/";
-        public void retrieveFleetDetails()
+        private const string BASE_URI = "https://sandboxapi.deere.com/aemp/";
+        private readonly OAuthSignedRestClient _apiClient;
+
+        public FleetInfo(OAuthSignedRestClient apiClient)
         {
-            OAuthCredentials credentials = OAuthWorkFlow.createOAuthCredentials(OAuthType.ProtectedResource, ApiCredentials.TOKEN.token,
-                ApiCredentials.TOKEN.secret, null, null);
-
-
-            Hammock.RestClient client = new Hammock.RestClient()
-            {
-                Authority = "",
-                Credentials = credentials
-            };
-
-            Hammock.RestRequest request = new Hammock.RestRequest()
-            {
-                Path = BASE_URI + "Fleet"
-            };
-
-            request.AddHeader("Accept", "application/xml");
-
-            Hammock.RestResponse response = client.Request(request);
-            request.Path = BASE_URI + response.Headers.Get("Location");
-
-            System.Diagnostics.Debug.WriteLine("");
-
-            makeRecursiveApiCallTillLastPageOfApiResponse(request, credentials, client);
+            _apiClient = apiClient;
         }
 
-        public void makeRecursiveApiCallTillLastPageOfApiResponse(Hammock.RestRequest request, OAuthCredentials credentials, Hammock.RestClient client)
+        public void RetrieveFleetDetails()
         {
-            Hammock.RestResponse response = client.Request(request);
-            Fleet fleet = Deserialise<Fleet>(response.ContentStream);
-            printFirstEquipmentDetailsFromEachPage(fleet);
-            List<Links> links = fleet.Links;
-            for (int i = 0; i < links.Count; i++)
+            RestRequest request = new RestRequest()
             {
-                if (links[i].Rel.Equals("next"))
+                //Start with Fleet/1. Base_URI + "FLEET" is just a redirect to page 1, so starting with page 1 makes everything easier. 
+                Url = BASE_URI + "Fleet/1", 
+                Method = HttpMethod.Get,
+                Accept = "application/xml"
+            };
+
+            MakeRecursiveApiCallTillLastPageOfApiResponse(request, _apiClient);
+        }
+
+        public void MakeRecursiveApiCallTillLastPageOfApiResponse(RestRequest request, OAuthSignedRestClient client)
+        {
+            var webResponse = client.Execute(request);
+
+            if (webResponse.StatusCode == HttpStatusCode.OK)
+            {
+                Fleet fleet = webResponse.GetXMLResponseAsObject<Fleet>(typeof(Fleet));
+                PrintFirstEquipmentDetailsFromEachPage(fleet);
+                List<Links> links = fleet.Links;
+                for (int i = 0; i < links.Count; i++)
                 {
-                    request.Path = links[i].Href;
-                    makeRecursiveApiCallTillLastPageOfApiResponse(request, credentials, client);
+                    if (links[i].Rel.Equals("next"))
+                    {
+                        request.Url = links[i].Href;
+                        MakeRecursiveApiCallTillLastPageOfApiResponse(request, client);
+                    }
                 }
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"Web Response was not a 200. Actual response is: {webResponse.StatusCode}");
             }
         }
 
-         public static T Deserialise<T>(Stream stream)
-        {
-                System.Xml.Serialization.XmlSerializer serializer = new System.Xml.Serialization.XmlSerializer(typeof(T));
-                T result = (T)serializer.Deserialize(stream);
-                return result;
-        }
-        public void printFirstEquipmentDetailsFromEachPage(Fleet fleet)
+        public void PrintFirstEquipmentDetailsFromEachPage(Fleet fleet)
         {
             List<Equipment> equipmentList = fleet.Equipment;
             foreach (Equipment equipment in equipmentList)
