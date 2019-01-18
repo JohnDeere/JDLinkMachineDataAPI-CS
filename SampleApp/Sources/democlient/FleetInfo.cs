@@ -28,12 +28,12 @@ namespace SampleApp.Sources.democlient
                 Accept = "application/xml"
             };
 
-            MakeRecursiveApiCallTillLastPageOfApiResponse(request, _apiClient);
+            MakeRecursiveApiCallTillLastPageOfApiResponse(request);
         }
 
-        public void MakeRecursiveApiCallTillLastPageOfApiResponse(RestRequest request, OAuthSignedRestClient client)
+        public void MakeRecursiveApiCallTillLastPageOfApiResponse(RestRequest request)
         {
-            var webResponse = client.Execute(request);
+            var webResponse = _apiClient.Execute(request);
 
             if (webResponse.StatusCode == HttpStatusCode.OK)
             {
@@ -45,7 +45,7 @@ namespace SampleApp.Sources.democlient
                     if (links[i].Rel.Equals("next"))
                     {
                         request.Url = links[i].Href;
-                        MakeRecursiveApiCallTillLastPageOfApiResponse(request, client);
+                        MakeRecursiveApiCallTillLastPageOfApiResponse(request);
                     }
                 }
             }
