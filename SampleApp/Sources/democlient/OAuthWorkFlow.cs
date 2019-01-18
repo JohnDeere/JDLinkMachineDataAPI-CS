@@ -1,97 +1,100 @@
-﻿using System;
+﻿using DevDefined.OAuth.Consumer;
+using DevDefined.OAuth.Framework;
+using System;
 using System.Collections.Generic;
-using Hammock.Authentication.OAuth;
-using System.Compat.Web;
 
 namespace SampleApp.Sources.democlient
 {
     class OAuthWorkFlow
     {
-        private String authUri;
-        private String verifier;
-        Dictionary<String, Link> links;
-        String reqToken ;
-        String reqSecret;
-
-        public void retrieveOAuthProviderDetails()
+        private const string AuthenticationUrl = "https://developer.deere.com/oauth/oauth10/initiate";
+        private const string UserAuthorizeUrl = "https://developer.deere.com/oauth/auz/authorize?oauth_token={0}";
+        private const string AccessTokenUrl = "https://developer.deere.com/oauth/oauth10/token";
+        private const string CallbackUrl = "https://developer.deere.com/oauth/auz/grants/provider/authcomplete";
+        public ApiCredentials Authenticate(string applicationKey, string applicationSecret)
         {
-            Link requestLink = new Link();
-            links = new Dictionary<String, Link>();
-            requestLink.uri = "https://developer.deere.com/oauth/oauth10/initiate";
-            links.Add("oauthRequestToken", requestLink);
-            Link accessTokenLink = new Link();
-            accessTokenLink.uri = "https://developer.deere.com/oauth/oauth10/token";
-            links.Add("oauthAccessToken", accessTokenLink);
-            Link authorizeTokenLink = new Link();
-            authorizeTokenLink.uri = "https://developer.deere.com/oauth/auz/authorize";
-            links.Add("oauthAuthorizeRequestToken", authorizeTokenLink);          
+            // Step 1: Get an oAuth request token using your application's key and secret
+            var requestToken = GetRequestToken(applicationKey, applicationSecret);
+
+            // Step 2: Get explicit consent from the user to access their data
+            var verificationCode = GetUserAuthorization(requestToken.Token);
+
+            // Step 3: Exchange the oAuth request token and user verification code for an oAuth access token
+            return ExchangeRequestTokenForAccessToken(applicationKey, applicationSecret, requestToken, verificationCode);
         }
 
-         public void getRequestToken() 
-         {
-            Hammock.Authentication.OAuth.OAuthCredentials credentials = createOAuthCredentials(OAuthType.RequestToken, null, null, null, 
-                "https://developer.deere.com/oauth/auz/grants/provider/authcomplete");
-            
-             Hammock.RestClient client = new Hammock.RestClient()
-            {
-                Authority = "",
-                Credentials = credentials
-            };
+        public void AuthenticateWithCallback(string applicationKey, string applicationSecret, string callbackUrl)
+        {
+            // This alternate version is useful if you have a webapp and can specify a callback URL
+            // It eliminates the need to copy/paste a verification code.
+            var oAuthSession = CreateOAuthSession(applicationKey, applicationSecret);
+            oAuthSession.RequestTokenUri = new Uri(AuthenticationUrl);
+            oAuthSession.CallbackUri = new Uri(CallbackUrl);
+            var requestToken = oAuthSession.GetRequestToken();
 
-            Hammock.RestRequest request = new Hammock.RestRequest()
-            {
-                Path = links["oauthRequestToken"].uri
-            };
-
-            Hammock.RestResponse response = client.Request(request);
-            reqToken = response.Content.Split('&')[0];
-            authUri = links["oauthAuthorizeRequestToken"].uri + "?" + reqToken;
-            reqToken =reqToken.Split('=')[1];
-            reqSecret = response.Content.Split('&')[1].Split('=')[1];
-        }
-        
-         public void authorizeRequestToken() {
-            System.Diagnostics.Debug.WriteLine("authUri: " +authUri);
-            Console.WriteLine("Hit this URL in browser and login. Copy the verifier from browser URL and paste below and hit Enter"  +authUri);
-            verifier = Console.ReadLine();
+            var userAuthorizeUrl = oAuthSession.GetUserAuthorizationUrlForToken(requestToken, callbackUrl);
+            // Now, userAuthorizeUrl contains a website address. Send the user to that website address to sign in 
+            // and authorize your application. 
+            //
+            // On your server, there needs to be a service at uri {callbackUrl} that can accept the callback once
+            // the user authenticates. For an example of that, check out the DevDefined.OAuth project:
+            // https://github.com/bittercoder/DevDefined.OAuth/blob/master/src/DevDefined.OAuth.Wcf/OAuthInterceptor.cs
         }
 
-         public void exchangeRequestTokenForAccessToken() {
-            OAuthCredentials credentials = createOAuthCredentials(OAuthType.AccessToken, reqToken, HttpUtility.UrlDecode(reqSecret), verifier, null);
-            Hammock.RestClient client = new Hammock.RestClient()
+        private ApiCredentials ExchangeRequestTokenForAccessToken(string applicationKey, string applicationSecret,
+                                                                  IToken requestToken, string verificationCode)
+        {
+            var oAuthSession = CreateOAuthSession(applicationKey, applicationSecret);
+            oAuthSession.AccessTokenUri = new Uri(AccessTokenUrl);
+            var accessToken = oAuthSession.ExchangeRequestTokenForAccessToken(requestToken, verificationCode);
+
+            return new ApiCredentials
             {
-                Authority = "",
-                Credentials = credentials
+                ClientKey = applicationKey,
+                ClientSecret = applicationSecret,
+                TokenKey = accessToken.Token,
+                TokenSecret = accessToken.TokenSecret
             };
-
-            Hammock.RestRequest request = new Hammock.RestRequest()
-            {
-                Path = links["oauthAccessToken"].uri
-            };
-
-            Hammock.RestResponse response = client.Request(request);
-
-            Console.WriteLine("Token:" + response.Content.Split('&')[0].Split('=')[1] + " \n Token Secret:" + response.Content.Split('&')[1].Split('=')[1]);
-            String oauthToken = response.Content.Split('&')[0].Split('=')[1];
-            String oauthTokenSecret = response.Content.Split('&')[1].Split('=')[1];
-
-            System.Diagnostics.Debug.WriteLine("\n Token:" + oauthToken + "\n Token Secret:" + HttpUtility.UrlDecode(oauthTokenSecret));
         }
 
-        public static OAuthCredentials createOAuthCredentials(OAuthType type, String strToken, String strSecret, String strVerifier, String strCallBack ){
-            OAuthCredentials credentials = new OAuthCredentials()
+        private IToken GetRequestToken(string applicationKey, string applicationSecret)
+        {
+            var oAuthSession = CreateOAuthSession(applicationKey, applicationSecret);
+            oAuthSession.RequestTokenUri = new Uri(AuthenticationUrl);
+            oAuthSession.CallbackUri = new Uri(CallbackUrl);  //Need this to get response
+            var requestToken = oAuthSession.GetRequestToken();
+
+            return requestToken;
+        }
+
+        private string GetUserAuthorization(string requestToken)
+        {
+            var userAuthorizationUrl = string.Format(UserAuthorizeUrl, requestToken);
+
+            // This opens the default browser to https://developer.deere.com/oauth/auz/authorize?oauth_token={0}
+            // If you have a webapp, just have the user navigate to this url.
+            //  
+            // Sign in to the MyJohnDeere login screen and grant your application access to your data.
+            // Once you are done, the address bar should show a "verifier code" (ie oauth_verifier=). Enter the verifier code into the application terminal.
+            System.Diagnostics.Process.Start(userAuthorizationUrl);
+
+            Console.WriteLine("Please enter the verifier code from your browser:");
+            var verificationCode = Console.ReadLine();
+
+            return verificationCode;
+        }
+
+        private OAuthSession CreateOAuthSession(string applicationKey, string applicationSecret)
+        {
+            var oAuthContext = new OAuthConsumerContext
             {
-                Type =type,
-                SignatureMethod = OAuthSignatureMethod.HmacSha1,
-                ParameterHandling = OAuthParameterHandling.HttpAuthorizationHeader,
-                ConsumerKey = ApiCredentials.CLIENT.key,
-                ConsumerSecret = ApiCredentials.CLIENT.secret,
-                Token = strToken,
-                TokenSecret = strSecret,
-                Verifier = strVerifier,
-                CallbackUrl = strCallBack
+                ConsumerKey = applicationKey,
+                ConsumerSecret = applicationSecret,
+                SignatureMethod = SignatureMethod.HmacSha1,
+                UseHeaderForOAuthParameters = true
             };
-            return credentials;
+            var oAuthSession = new OAuthSession(oAuthContext);
+            return oAuthSession;
         }
     }
 }

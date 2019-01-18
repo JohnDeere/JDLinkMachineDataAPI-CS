@@ -2,9 +2,22 @@
 
 namespace SampleApp.Sources.democlient
 {
-    abstract class ApiCredentials
+    public class ApiCredentials
     {
-        public static OAuthClient CLIENT = new OAuthClient("Replace with App id from developer.deere.com", "Replace with secret for the App from developer.deere.com");
-        public static OAuthToken TOKEN = new OAuthToken("token printed in console output after running the oauth worflow code", "token secret printed in console output generated after running the oauth workflow code");
+        public string ClientKey { get; set; }
+        public string ClientSecret { get; set; }
+        public string TokenKey { get; set; }
+        public string TokenSecret { get; set; }
+
+        public ApiCredentials()
+        {
+            // If you want to play around without needing to generate tokens every time, you could place your credentials
+            // in this constructor, go back to the Program.main method, and comment out the calls to OAuthWorkFlow.
+            ClientKey = "Your application's 'App ID' from developer.deere.com";
+            ClientSecret = "Your application's 'Shared Secret' from developer.deere.com";
+
+            TokenKey = "This is generated from the oAuth workflow; see OAuthWorkFlow.GetRequestToken()";
+            TokenSecret = "This is generated from the oAuth workflow; see OAuthWorkFlow.GetRequestToken()";
+        }
     }
 }
