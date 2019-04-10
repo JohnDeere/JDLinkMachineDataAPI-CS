@@ -6,7 +6,7 @@ Microsoft .Net Framework 4.7.2(Last tested) and Microsoft Visual Studio C# (comm
 
 ## Setup and Run
 <ul>
-  <li>Update Program.cs with appId and secret from developer.deere.com..</li>
+  <li>Update Program.cs with appId and secret from developer.deere.com.</li>
   <li>Run Program.cs file to generate OAuth tokens.</li> 
   <li>Browser/new tab should open. Login into Deere and authoize app</li> 
   <li>Copy oauth_verifier value that is in address bar of the browser and paste into terminal</li>
