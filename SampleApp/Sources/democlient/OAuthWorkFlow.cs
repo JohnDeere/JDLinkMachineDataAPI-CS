@@ -10,7 +10,7 @@ namespace SampleApp.Sources.democlient
         private const string AuthenticationUrl = "https://developer.deere.com/oauth/oauth10/initiate";
         private const string UserAuthorizeUrl = "https://developer.deere.com/oauth/auz/authorize?oauth_token={0}";
         private const string AccessTokenUrl = "https://developer.deere.com/oauth/oauth10/token";
-        private const string CallbackUrl = "https://developer.deere.com/oauth/auz/grants/provider/authcomplete";
+        private const string CallbackUrl = "https://developer.deere.com/getToken";
         public ApiCredentials Authenticate(string applicationKey, string applicationSecret)
         {
             // Step 1: Get an oAuth request token using your application's key and secret
